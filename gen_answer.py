@@ -47,7 +47,7 @@ def get_answer(
     if output is API_ERROR_OUTPUT:
         return
     
-    messages.append({"role": "assistant", "content": output})
+    messages.append({"role": "assistant", "content": output['answer']})
 
     # Dump answers
     ans = {

@@ -43,7 +43,7 @@ def register_engine(engine_type):
 def load_questions(question_file: str):
     """Load questions from a file."""
     questions = []
-    with open(question_file, "r") as ques_file:
+    with open(question_file, "r", encoding='utf-8') as ques_file:
         for line in ques_file:
             if line:
                 questions.append(json.loads(line))
@@ -63,7 +63,7 @@ def load_model_answers(answer_dir: str):
     for filename in filenames:
         model_name = os.path.basename(filename)[:-6]
         answer = {}
-        with open(filename) as fin:
+        with open(filename, encoding='utf-8') as fin:
             for line in fin:
                 line = json.loads(line)
                 answer[line["uid"]] = line
@@ -85,7 +85,7 @@ def load_id_to_model_answers(answer_dir: str):
     for filename in filenames:
         model_name = os.path.basename(filename)[:-6]
         
-        with open(filename) as fin:
+        with open(filename, encoding='utf-8') as fin:
             for line in fin:
                 line = json.loads(line)
                 
@@ -495,19 +495,49 @@ def http_completion_gemini(model, messages, **kwargs):
 def vertex_completion_gemini(model, messages, project_id, regions, **kwargs):
     import requests
     import subprocess
+    import platform
+    
+    output = API_ERROR_OUTPUT
+    
+    # Handle different model types with appropriate APIs
+    if model.startswith("gemini"):
+        return _vertex_gemini(model, messages, project_id, regions, **kwargs)
+    elif model.startswith("meta/") or "llama" in model.lower():
+        return _vertex_llama(model, messages, project_id, regions, **kwargs)
+    elif model.startswith("claude") or "claude" in model.lower():
+        return _vertex_claude(model, messages, project_id, regions, **kwargs)
+    elif model.startswith("mistral"):
+        return _vertex_mistral(model, messages, project_id, regions, **kwargs)
+    else:
+        # Default to gemini format
+        return _vertex_gemini(model, messages, project_id, regions, **kwargs)
+
+
+def _vertex_gemini(model, messages, project_id, regions, **kwargs):
+    """Handle Gemini models using Vertex AI"""
+    import requests
+    import subprocess
+    import platform
     
     output = API_ERROR_OUTPUT
     
     # Obtain the access token using gcloud CLI
+    gcloud_cmd = "gcloud.cmd" if platform.system() == "Windows" else "gcloud"
     access_token = subprocess.check_output(
-        ["gcloud", "auth", "application-default", "print-access-token"], 
+        [gcloud_cmd, "auth", "application-default", "print-access-token"], 
         text=True
     ).strip()
 
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    # Google/Gemini format
     if messages[0]["role"] == "system":
         data = {
             "systemInstruction": {
-                "role": "system", # ignored by vertexi api (04/18/2025)
+                "role": "system",
                 "parts": [{
                     "text": messages[0]["content"]
                 }]
@@ -525,15 +555,10 @@ def vertex_completion_gemini(model, messages, project_id, regions, **kwargs):
     messages = [{"parts":[{"text":turn["content"]}], "role":role_map[turn["role"]]} for turn in messages]
 
     url = (
-        f"https://us-central1-aiplatform.googleapis.com/v1/projects/"
+        f"https://{regions}-aiplatform.googleapis.com/v1/projects/"
         f"{project_id}/locations/{regions}/publishers/google/models/"
         f"{model}:generateContent"
     )
-    
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
 
     data = data | {
         "contents": messages,
@@ -550,12 +575,196 @@ def vertex_completion_gemini(model, messages, project_id, regions, **kwargs):
     response = requests.post(url, json=data, headers=headers)
     
     try:
-        output = {
-            "answer": response.json()["candidates"][0]["content"]["parts"][0]["text"],
-        }
+        response_json = response.json()
+        
+        if "candidates" in response_json and len(response_json["candidates"]) > 0:
+            candidate = response_json["candidates"][0]
+            if "content" in candidate and "parts" in candidate["content"] and len(candidate["content"]["parts"]) > 0:
+                output = {
+                    "answer": candidate["content"]["parts"][0]["text"],
+                }
+            else:
+                print(f"Unexpected response structure for {model}:")
+                print(response_json)
+        else:
+            print(f"No candidates in response for {model}:")
+            print(response_json)
+            
     except KeyError as e:
-        print(type(e), e)
+        print(f"KeyError {e} for model {model}")
         print(response.json())
+    except Exception as e:
+        print(f"Error parsing response for model {model}: {e}")
+        print(f"Response status: {response.status_code}")
+        print(f"Response content: {response.text}")
+        
+    return output
+
+
+def _vertex_claude(model, messages, project_id, regions, **kwargs):
+    """Handle Claude models using AnthropicVertex client"""
+    try:
+        from anthropic import AnthropicVertex
+    except ImportError:
+        print("anthropic package not installed. Install with: pip install anthropic")
+        return API_ERROR_OUTPUT
+    
+    output = API_ERROR_OUTPUT
+    
+    try:
+        client = AnthropicVertex(region=regions, project_id=project_id)
+        
+        # Handle system message
+        system_msg = None
+        if messages[0]["role"] == "system":
+            system_msg = messages[0]["content"]
+            messages = messages[1:]
+        
+        # Prepare request parameters
+        request_params = {
+            "model": model,
+            "messages": messages,
+        }
+        
+        if "max_tokens" in kwargs:
+            request_params["max_tokens"] = kwargs["max_tokens"]
+        if "temperature" in kwargs:
+            request_params["temperature"] = kwargs["temperature"]
+        if system_msg:
+            request_params["system"] = system_msg
+            
+        response = client.messages.create(**request_params)
+        
+        output = {
+            "answer": response.content[0].text
+        }
+        
+    except Exception as e:
+        print(f"Error with Claude model {model}: {e}")
+        
+    return output
+
+
+def _vertex_llama(model, messages, project_id, regions, **kwargs):
+    """Handle Llama models using Vertex AI OpenAPI endpoint"""
+    import requests
+    import subprocess
+    import platform
+    
+    output = API_ERROR_OUTPUT
+    
+    # Obtain the access token using gcloud CLI
+    gcloud_cmd = "gcloud.cmd" if platform.system() == "Windows" else "gcloud"
+    access_token = subprocess.check_output(
+        [gcloud_cmd, "auth", "application-default", "print-access-token"], 
+        text=True
+    ).strip()
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    # Use OpenAPI endpoint for Llama models
+    url = f"https://{regions}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{regions}/endpoints/openapi/chat/completions"
+    
+    data = {
+        "model": model,
+        "messages": messages,
+    }
+    
+    if "max_tokens" in kwargs:
+        data["max_tokens"] = kwargs["max_tokens"]
+    if "temperature" in kwargs:
+        data["temperature"] = kwargs["temperature"]
+
+    response = requests.post(url, json=data, headers=headers)
+    
+    try:
+        response_json = response.json()
+        
+        if "choices" in response_json and len(response_json["choices"]) > 0:
+            choice = response_json["choices"][0]
+            if "message" in choice and "content" in choice["message"]:
+                output = {
+                    "answer": choice["message"]["content"]
+                }
+            else:
+                print(f"Unexpected response structure for {model}:")
+                print(response_json)
+        else:
+            print(f"No choices in response for {model}:")
+            print(response_json)
+            
+    except KeyError as e:
+        print(f"KeyError {e} for model {model}")
+        print(response.json())
+    except Exception as e:
+        print(f"Error parsing response for model {model}: {e}")
+        print(f"Response status: {response.status_code}")
+        print(f"Response content: {response.text}")
+        
+    return output
+
+
+def _vertex_mistral(model, messages, project_id, regions, **kwargs):
+    """Handle Mistral models using Vertex AI"""
+    import requests
+    import subprocess
+    import platform
+    
+    output = API_ERROR_OUTPUT
+    
+    # Obtain the access token using gcloud CLI
+    gcloud_cmd = "gcloud.cmd" if platform.system() == "Windows" else "gcloud"
+    access_token = subprocess.check_output(
+        [gcloud_cmd, "auth", "application-default", "print-access-token"], 
+        text=True
+    ).strip()
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    # Use rawPredict endpoint for Mistral models
+    url = f"https://{regions}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{regions}/publishers/mistralai/models/{model}:rawPredict"
+    
+    data = {
+        "model": model,
+        "messages": messages,
+    }
+    
+    if "max_tokens" in kwargs:
+        data["max_tokens"] = kwargs["max_tokens"]
+    if "temperature" in kwargs:
+        data["temperature"] = kwargs["temperature"]
+
+    response = requests.post(url, json=data, headers=headers)
+    
+    try:
+        response_json = response.json()
+        
+        if "choices" in response_json and len(response_json["choices"]) > 0:
+            choice = response_json["choices"][0]
+            if "message" in choice and "content" in choice["message"]:
+                output = {
+                    "answer": choice["message"]["content"]
+                }
+            else:
+                print(f"Unexpected response structure for {model}:")
+                print(response_json)
+        else:
+            print(f"No choices in response for {model}:")
+            print(response_json)
+            
+    except KeyError as e:
+        print(f"KeyError {e} for model {model}")
+        print(response.json())
+    except Exception as e:
+        print(f"Error parsing response for model {model}: {e}")
+        print(f"Response status: {response.status_code}")
+        print(f"Response content: {response.text}")
         
     return output
 
@@ -654,13 +863,13 @@ def chat_completion_meta(model, messages, temperature, max_tokens, api_dict, **k
 def reorg_answer_file(answer_file):
     """Sort by question id and de-duplication"""
     answers = {}
-    with open(answer_file, "r") as fin:
+    with open(answer_file, "r", encoding='utf-8') as fin:
         for l in fin:
             qid = json.loads(l)["uid"]
             answers[qid] = l
 
     qids = sorted(list(answers.keys()))
-    with open(answer_file, "w") as fout:
+    with open(answer_file, "w", encoding='utf-8') as fout:
         for qid in qids:
             fout.write(answers[qid])
 

@@ -8,3 +8,5 @@ gradio==5.25.2
 plotly
 scikit-learn
 boto3
+torch       
+anthropic[vertex]
