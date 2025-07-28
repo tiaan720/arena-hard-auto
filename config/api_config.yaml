@@ -113,21 +113,11 @@ claude-3-5-haiku@20241022:
 #     model: claude-opus-4@20250514
 #     endpoints: null
 #     api_type: vertex
-#     parallel: 16
+#     parallel: 4
 #     project_id: research-su-llm-routing
-#     regions: us-east5
+#     regions: europe-west1
 #     max_tokens: 4096
-#     temperature: 0.7
-
-claude-opus-4@20250514:
-    model: claude-opus-4@20250514
-    endpoints: null
-    api_type: vertex
-    parallel: 4
-    project_id: research-su-llm-routing
-    regions: europe-west1
-    max_tokens: 4096
-    temperature: 0.0
+#     temperature: 0.0
 
 mistral-large-2411:
     model: mistral-large-2411
@@ -139,8 +129,8 @@ mistral-large-2411:
     max_tokens: 4096
     temperature: 0.0
 
-mistral-small-2503@001:
-    model: mistral-small-2503@001
+mistral-small-2503:
+    model: mistral-small-2503
     endpoints: null
     api_type: vertex
     parallel: 4

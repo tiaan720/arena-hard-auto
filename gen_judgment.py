@@ -158,44 +158,69 @@ if __name__ == "__main__":
 
     endpoint_settings = endpoint_list[configs["judge_model"]]
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=endpoint_settings["parallel"]) as executor:
-        futures = []
-        for model in models:
-            count = 0
-            for question in questions:
-                uid = question["uid"]
+    # Collect all tasks first to avoid memory issues with too many futures
+    all_tasks = []
+    for model in models:
+        count = 0
+        
+        # Skip models that don't have any answers
+        if model not in model_answers:
+            print(f"Warning: No answers found for model {model}. Skipping.")
+            continue
+            
+        for question in questions:
+            uid = question["uid"]
 
-                kwargs = {}
-                kwargs["question"] = question
-                if model in model_answers and not uid in model_answers[model]:
-                    print(f"Warning: {model} answer to {question['uid']} cannot be found.")
-                    continue
+            if uid not in model_answers[model]:
+                print(f"Warning: {model} answer to {question['uid']} cannot be found.")
+                continue
 
-                if model in existing_judgments and uid in existing_judgments[model]:
-                    count += 1
-                    continue
+            if model in existing_judgments and uid in existing_judgments[model]:
+                count += 1
+                continue
 
-                kwargs["answer"] = model_answers[model][uid]
-                kwargs["baseline"] = model_answers[
-                    JUDGE_SETTINGS[question["category"]]["baseline"]
-                ][uid]
+            # Check if baseline exists
+            baseline = JUDGE_SETTINGS[question["category"]]["baseline"]
+            if baseline not in model_answers or uid not in model_answers[baseline]:
+                print(f"Warning: Baseline {baseline} answer to {question['uid']} cannot be found.")
+                continue
+
+            kwargs = {}
+            kwargs["question"] = question
+            kwargs["answer"] = model_answers[model][uid]
+            kwargs["baseline"] = model_answers[baseline][uid]
+            
+            if ref_answers:
+                kwargs["reference"] = [ref_answer[uid] for ref_answer in ref_answers]
+            else:
+                kwargs["reference"] = None
                 
-                if ref_answers:
-                    kwargs["reference"] = [ref_answer[uid] for ref_answer in ref_answers]
-                else:
-                    kwargs["reference"] = None
-                    
-                kwargs["configs"] = configs
-                kwargs["settings"] = endpoint_settings
-                kwargs["output_file"] = output_files[model]
-                                
-                future = executor.submit(judgment, kwargs)
+            kwargs["configs"] = configs
+            kwargs["settings"] = endpoint_settings
+            kwargs["output_file"] = output_files[model]
+            
+            all_tasks.append(kwargs)
+
+        if count > 0:
+            print(f"{count} number of existing judgments")
+    
+    print(f"Total tasks to process: {len(all_tasks)}")
+    
+    # Process tasks in batches to avoid memory issues
+    batch_size = 100  # Process 100 tasks at a time
+    with concurrent.futures.ThreadPoolExecutor(max_workers=endpoint_settings["parallel"]) as executor:
+        for i in range(0, len(all_tasks), batch_size):
+            batch = all_tasks[i:i + batch_size]
+            futures = []
+            
+            for task in batch:
+                future = executor.submit(judgment, task)
                 futures.append(future)
-
-            if count > 0:
-                print(f"{count} number of existing judgments")
-
-        for future in tqdm(
-            concurrent.futures.as_completed(futures), total=len(futures)
-        ):
-            future.result()
+            
+            print(f"Processing batch {i//batch_size + 1}/{(len(all_tasks) + batch_size - 1)//batch_size}")
+            for future in tqdm(
+                concurrent.futures.as_completed(futures), 
+                total=len(futures),
+                desc=f"Batch {i//batch_size + 1}"
+            ):
+                future.result()

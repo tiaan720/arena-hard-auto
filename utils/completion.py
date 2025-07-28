@@ -56,12 +56,19 @@ def load_model_answers(answer_dir: str):
     The return value is a python dict of type:
     Dict[model_name: str -> Dict[uid: int -> answer: dict]]
     """
+    # Get files in main directory and subdirectories
     filenames = glob(os.path.join(answer_dir, "*.jsonl"))
+    filenames.extend(glob(os.path.join(answer_dir, "**", "*.jsonl"), recursive=True))
     filenames.sort()
     model_answers = {}
 
     for filename in filenames:
-        model_name = os.path.basename(filename)[:-6]
+        # For subdirectory files, include the subdirectory in the model name
+        rel_path = os.path.relpath(filename, answer_dir)
+        model_name = rel_path[:-6]  # Remove .jsonl extension
+        # Normalize path separators to forward slashes for consistency
+        model_name = model_name.replace(os.sep, '/')
+        
         answer = {}
         with open(filename, encoding='utf-8') as fin:
             for line in fin:

@@ -1,7 +1,7 @@
 # judge_model: gpt-4.5-preview (This judge is goated)
 
-judge_model: gemini-2.5-pro
-temperature: 1.0
+judge_model: gemini-2.5-flash
+temperature: 0.0
 max_tokens: 32000
 
 # judge_model: gpt-4.1
@@ -19,20 +19,20 @@ regex_patterns:
 prompt_template: "<|User Prompt|>\n{QUESTION}\n\n<|The Start of Assistant A's Answer|>\n{ANSWER_A}\n<|The End of Assistant A's Answer|>\n\n<|The Start of Assistant B's Answer|>\n{ANSWER_B}\n<|The End of Assistant B's Answer|>"
 
 model_list:
-  # - gemini-2.0-flash-lite-001
-  # - gemini-2.5-pro
-  # - gemini-2.0-flash-001
+  - gemini-2.0-flash-lite-001
+  - gemini-2.5-pro
+  - gemini-2.0-flash-001
   # - gemini-2.0-flash-lite # not done yet 
-  # - gemini-2.0-flash
-  # - gemini-2.5-flash
+  - gemini-2.0-flash
+  # - gemini-2.5-flash  # Used as judge model, shouldn't evaluate itself
   - meta/llama-3.3-70b-instruct-maas
   - meta/llama-4-maverick-17b-128e-instruct-maas
   - meta/llama-4-scout-17b-16e-instruct-maas
   - claude-3-7-sonnet@20250219
   - claude-sonnet-4@20250514
   - claude-3-5-haiku@20241022
-  - claude-opus-4@20250514
+  # - claude-opus-4@20250514  # No answers available yet
   - mistral-large-2411
-  - mistral-small-2503@001
+  - mistral-small-2503
   
 

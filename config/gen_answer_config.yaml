@@ -3,11 +3,11 @@ bench_name: arena-hard-v2.0
 
 # a list of model to generate answers
 model_list:
-  # - gemini-2.0-flash-lite-001
-  # - gemini-2.5-pro
-  # - gemini-2.0-flash-001
+  - gemini-2.0-flash-lite-001
+  - gemini-2.5-pro
+  - gemini-2.0-flash-001
   # - gemini-2.0-flash-lite
-  # - gemini-2.0-flash
+  - gemini-2.0-flash
   # - gemini-2.5-flash
   - meta/llama-3.3-70b-instruct-maas
   - meta/llama-4-maverick-17b-128e-instruct-maas
@@ -17,4 +17,4 @@ model_list:
   - claude-3-5-haiku@20241022
   - claude-opus-4@20250514
   - mistral-large-2411
-  - mistral-small-2503@001
+  - mistral-small-2503
