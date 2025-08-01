@@ -35,7 +35,7 @@ gemini-2.5-flash:
     model: gemini-2.5-flash
     endpoints: null
     api_type: vertex
-    parallel: 4
+    parallel: 16
     project_id: research-su-llm-routing
     regions: us-central1
 

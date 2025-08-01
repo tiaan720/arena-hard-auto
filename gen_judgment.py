@@ -146,9 +146,11 @@ if __name__ == "__main__":
     output_files = {}
     output_dir = f"data/{configs['bench_name']}/model_judgment/{configs['judge_model']}"
     for model in models:
+        # Replace forward slashes with underscores to avoid creating subdirectories
+        safe_model_name = model.replace("/", "_")
         output_files[model] = os.path.join(
             output_dir,
-            f"{model}.jsonl",
+            f"{safe_model_name}.jsonl",
         )
 
     for output_file in output_files.values():
