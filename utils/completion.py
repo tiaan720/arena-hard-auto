@@ -482,19 +482,30 @@ def http_completion_gemini(model, messages, **kwargs):
                 f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
                 json=json_request,
             )
+            
+            if response.status_code != 200:
+                print(f"**API REQUEST ERROR** Reason: status code {response.status_code}.")
+                time.sleep(API_RETRY_SLEEP)
+                continue
+                
+            response_json = response.json()
+            
+            # Try to extract the answer from the response
+            try:
+                output = {
+                    "answer": response_json["candidates"][0]["content"]["parts"][0]["text"],
+                }
+                break  # Successfully got the answer, exit retry loop
+            except KeyError as e:
+                print(f"Unexpected response structure for {model}:")
+                print(response_json)
+                print(f"KeyError: {e}")
+                time.sleep(API_RETRY_SLEEP)
+                continue
+                
         except Exception as e:
             print(f"**API REQUEST ERROR** Reason: {e}.")
             time.sleep(API_RETRY_SLEEP)
-        if response.status_code != 200:
-            print(f"**API REQUEST ERROR** Reason: status code {response.status_code}.")
-            time.sleep(API_RETRY_SLEEP)
-        try:
-            output = {
-                "answer": response.json()["candidates"][0]["content"]["parts"][0]["text"],
-            }
-        except KeyError as e:
-            print(type(e), e)
-            print(response.json())
     return output
     
 

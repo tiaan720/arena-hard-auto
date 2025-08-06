@@ -32,14 +32,29 @@ def get_score(judgment, patterns):
 
 
 def pairwise_judgment(question, baseline, answer, reference, configs, settings):
-    prompt_args = {
-        "QUESTION": question['prompt'],
-        "ANSWER_A": baseline["messages"][-1]["content"]['answer'],
-        "ANSWER_B": answer["messages"][-1]["content"]['answer'],
-    }
+    # Extract answer content with error handling
+    def extract_answer_content(model_answer):
+        content = model_answer["messages"][-1]["content"]
+        if isinstance(content, dict) and 'answer' in content:
+            return content['answer']
+        elif isinstance(content, str):
+            return content
+        else:
+            print(f"Warning: Unexpected content structure: {content}")
+            return str(content)
     
-    if reference:
-        prompt_args[f"REFERENCE"] = reference["messages"][-1]["content"]['answer']
+    try:
+        prompt_args = {
+            "QUESTION": question['prompt'],
+            "ANSWER_A": extract_answer_content(baseline),
+            "ANSWER_B": extract_answer_content(answer),
+        }
+        
+        if reference:
+            prompt_args[f"REFERENCE"] = extract_answer_content(reference)
+    except Exception as e:
+        print(f"Error extracting answer content: {e}")
+        return None
         
     user_prompt = configs["prompt_template"].format(**prompt_args)
     messages = [
