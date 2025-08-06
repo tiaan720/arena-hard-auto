@@ -28,10 +28,16 @@ def load_judgments(judge_names, benchmark, weight=3):
     #     print(f"WARNING: {judge_names} is already in the data. Removing it.")
     #     data = data[~data.model.isin(judge_names)].reset_index(drop=True)
 
-    null_indices = data.games.map(lambda x: x[0] is None or x[1] is None or x[0]['score'] is None or x[1]['score'] is None)
+    null_indices = data.games.map(lambda x: (
+        len(x) < 2 or 
+        x[0] is None or x[1] is None or 
+        x[0].get('score') is None or x[1].get('score') is None or
+        x[0].get('score') not in ['A>B', 'A>>B', 'A=B', 'A<<B', 'A<B', 'B>A', 'B>>A', 'B=A', 'B<<A', 'B<A'] or
+        x[1].get('score') not in ['A>B', 'A>>B', 'A=B', 'A<<B', 'A<B', 'B>A', 'B>>A', 'B=A', 'B<<A', 'B<A']
+    ))
     _data = data[~null_indices].reset_index(drop=True)
     
-    print(f"Number of null judgments found: {len(data) - len(_data)}")
+    print(f"Number of invalid judgments found: {len(data) - len(_data)}")
     
     # map label to score
     label_to_score = {
@@ -58,7 +64,13 @@ def load_judgments(judge_names, benchmark, weight=3):
 
 def get_model_style_metadata(benchmark):
     model_metadata = {}
+    # Search for jsonl files directly in model_answer directory
     for file in glob(os.path.join("data", benchmark, "model_answer", "*.jsonl")):
+        df = pd.read_json(file, lines=True)
+        model_metadata[df.iloc[0]['model']] = df.set_index('uid')['metadata'].to_dict()
+    
+    # Also search in subdirectories (like meta/ for llama models)
+    for file in glob(os.path.join("data", benchmark, "model_answer", "*", "*.jsonl")):
         df = pd.read_json(file, lines=True)
         model_metadata[df.iloc[0]['model']] = df.set_index('uid')['metadata'].to_dict()
         
