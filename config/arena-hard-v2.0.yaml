@@ -29,10 +29,10 @@ model_list:
   # - meta/llama-4-maverick-17b-128e-instruct-maas
   # - meta/llama-4-scout-17b-16e-instruct-maas
   # - claude-3-7-sonnet@20250219
-  - claude-sonnet-4@20250514
-  - claude-3-5-haiku@20241022
+  # - claude-sonnet-4@20250514
+  # - claude-3-5-haiku@20241022
   # - claude-opus-4@20250514  # No answers available yet
-  - mistral-large-2411
+  # - mistral-large-2411
   - mistral-small-2503
   
 
